@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Allow network connections (required for IAP tunneling) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- Allow incoming network connections (for local tunnel listener) -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+
+    <!-- Allow Keychain access for credential storage -->
+    <key>com.apple.security.keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.byteloomsolutions.iap-client</string>
+    </array>
+
+    <!-- Allow launching external applications (RDP client) -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+
+    <!-- File access for RDP file generation -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+</dict>
+</plist>
