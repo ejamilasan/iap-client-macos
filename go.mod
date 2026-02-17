@@ -1,4 +1,4 @@
-module iap-desktop-macos
+module iap-client-macos
 
 go 1.23.0
 

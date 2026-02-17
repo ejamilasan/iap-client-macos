@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"iap-desktop-macos/internal/auth"
-	"iap-desktop-macos/internal/config"
-	"iap-desktop-macos/internal/gcp"
-	"iap-desktop-macos/internal/keychain"
-	"iap-desktop-macos/internal/rdp"
-	"iap-desktop-macos/internal/tunnel"
-	"iap-desktop-macos/internal/viewer"
+	"iap-client-macos/internal/auth"
+	"iap-client-macos/internal/config"
+	"iap-client-macos/internal/gcp"
+	"iap-client-macos/internal/keychain"
+	"iap-client-macos/internal/rdp"
+	"iap-client-macos/internal/tunnel"
+	"iap-client-macos/internal/viewer"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )

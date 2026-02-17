@@ -1,4 +1,4 @@
-// Type definitions for the IAP Desktop app
+// Type definitions for the IAP Client app
 
 export interface Project {
   id: string;

@@ -34,7 +34,7 @@ A native macOS desktop application for connecting to Google Cloud Windows VMs th
 
 ### From DMG (recommended)
 
-1. Download the latest `.dmg` from the [releases page](https://github.com/your-org/iap-desktop-macos/releases)
+1. Download the latest `.dmg` from the [releases page](https://github.com/your-org/iap-client-macos/releases)
 2. Open the DMG and drag **IAP Client** to your Applications folder
 3. Right-click the app and select **Open** (required for unsigned apps on first launch)
 4. Click **Open** in the security dialog
@@ -49,8 +49,8 @@ Requirements:
 
 ```bash
 # Clone and set up
-git clone https://github.com/your-org/iap-desktop-macos.git
-cd iap-desktop-macos
+git clone https://github.com/your-org/iap-client-macos.git
+cd iap-client-macos
 make install-deps
 
 # Ensure ~/go/bin is in your PATH (add to ~/.zshrc to make permanent)
@@ -115,7 +115,7 @@ Open **IAP Client** from your Applications folder (or run `make dev` during deve
 ### Project Structure
 
 ```
-iap-desktop-macos/
+iap-client-macos/
 ├── main.go                    # Wails entry point
 ├── app.go                     # App struct with Wails method bindings
 ├── internal/
