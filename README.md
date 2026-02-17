@@ -1,6 +1,12 @@
-# IAP Client for macOS
+<p align="center">
+  <img src="build/appicon.png" width="128" alt="IAP Client for macOS">
+</p>
 
-A native macOS desktop application for connecting to Google Cloud Windows VMs through Identity-Aware Proxy (IAP) tunnels. Built with Go and React using the Wails framework.
+<h1 align="center">IAP Client for macOS</h1>
+
+<p align="center">
+  A native macOS desktop application for connecting to Google Cloud Windows VMs through Identity-Aware Proxy (IAP) tunnels. Built with Go and React using the Wails framework.
+</p>
 
 ## Screenshots
 
