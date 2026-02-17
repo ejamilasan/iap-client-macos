@@ -2,6 +2,12 @@
 
 A native macOS desktop application for connecting to Google Cloud Windows VMs through Identity-Aware Proxy (IAP) tunnels. Built with Go and React using the Wails framework.
 
+## Screenshots
+
+| Connection Dialog | Connected Session |
+|:-:|:-:|
+| ![Connection dialog for a Windows VM](docs/login.png) | ![Active RDP session with embedded viewer](docs/connected.png) |
+
 ## Features
 
 - **IAP Tunneling** -- Create secure IAP tunnels to GCP VM instances using the native [cedws/iapc](https://github.com/cedws/iapc) library
