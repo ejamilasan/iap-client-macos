@@ -396,7 +396,7 @@ func (a *App) ShowError(title, message string) {
 // ============================================================================
 
 // StartViewerSession starts an embedded RDP viewer session with a specific ID
-func (a *App) StartViewerSession(sessionId, tunnelID, username, password string, width, height int) error {
+func (a *App) StartViewerSession(sessionId, tunnelID, username, password string, width, height int, clipboardShare bool) error {
 	if a.viewerService == nil {
 		return fmt.Errorf("viewer service not initialized")
 	}
@@ -418,7 +418,14 @@ func (a *App) StartViewerSession(sessionId, tunnelID, username, password string,
 		height = 800
 	}
 
-	return a.viewerService.ConnectSessionWithResolution(sessionId, "localhost", tunnel.LocalPort, username, password, width, height)
+	return a.viewerService.ConnectSessionWithResolution(sessionId, "localhost", tunnel.LocalPort, username, password, width, height, clipboardShare)
+}
+
+// SetActiveViewerSession restricts clipboard synchronization to the visible session.
+func (a *App) SetActiveViewerSession(sessionId string) {
+	if a.viewerService != nil {
+		a.viewerService.SetActiveSession(sessionId)
+	}
 }
 
 // StopViewerSession stops a specific viewer session
@@ -491,7 +498,7 @@ func (a *App) GetViewerSessionIds() []string {
 
 // StartViewer starts the embedded RDP viewer for a tunnel (backward compatible)
 func (a *App) StartViewer(tunnelID, username, password string) error {
-	return a.StartViewerSession("default", tunnelID, username, password, 1280, 800)
+	return a.StartViewerSession("default", tunnelID, username, password, 1280, 800, true)
 }
 
 // StartViewerDirect starts the embedded RDP viewer connecting directly (backward compatible)

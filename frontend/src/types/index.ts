@@ -93,4 +93,5 @@ export interface ViewerSession {
   zone: string;
   status: 'connecting' | 'connected' | 'error' | 'disconnected';
   error?: string;
+  clipboardShare: boolean;
 }

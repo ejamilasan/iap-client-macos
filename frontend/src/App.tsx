@@ -67,11 +67,11 @@ function App() {
       return;
     }
 
-    await startSession(connection.project, connection.zone, connection.instance, connection.username, password);
+    await startSession(connection.project, connection.zone, connection.instance, connection.username, password, connection.rdpSettings?.clipboardShare !== false);
   };
 
   // Start a new RDP session
-  const startSession = async (project: string, zone: string, instance: string, username: string, password: string) => {
+  const startSession = async (project: string, zone: string, instance: string, username: string, password: string, clipboardShare: boolean = true) => {
     try {
       // Start tunnel
       // @ts-ignore - Wails binding
@@ -88,6 +88,7 @@ function App() {
         project,
         zone,
         status: 'connecting',
+        clipboardShare,
       };
 
       setSessions(prev => [...prev, newSession]);
@@ -160,7 +161,8 @@ function App() {
           connection.zone,
           connection.instance,
           connection.username,
-          password
+          password,
+          connection.rdpSettings?.clipboardShare !== false
         );
       }
 

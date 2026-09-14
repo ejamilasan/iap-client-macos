@@ -202,6 +202,15 @@ export function ConnectionForm({ instance, connection, onSave, onCancel }: Conne
               <option value="3840x2160">3840 x 2160 (4K)</option>
             </select>
           </div>
+
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={rdpSettings.clipboardShare}
+              onChange={(e) => setRdpSettings({ ...rdpSettings, clipboardShare: e.target.checked })}
+            />
+            Share clipboard with the remote session
+          </label>
         </div>
       )}
 
