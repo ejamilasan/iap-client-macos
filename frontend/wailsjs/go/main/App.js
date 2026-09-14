@@ -82,6 +82,10 @@ export function ResetWindowsPassword(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ResetWindowsPassword'](arg1, arg2, arg3, arg4);
 }
 
+export function SetActiveViewerSession(arg1) {
+  return window['go']['main']['App']['SetActiveViewerSession'](arg1);
+}
+
 export function SetViewerQuality(arg1) {
   return window['go']['main']['App']['SetViewerQuality'](arg1);
 }
@@ -110,8 +114,8 @@ export function StartViewerDirect(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['StartViewerDirect'](arg1, arg2, arg3, arg4);
 }
 
-export function StartViewerSession(arg1, arg2, arg3, arg4, arg5, arg6) {
-  return window['go']['main']['App']['StartViewerSession'](arg1, arg2, arg3, arg4, arg5, arg6);
+export function StartViewerSession(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['StartViewerSession'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function StopAllTunnels() {

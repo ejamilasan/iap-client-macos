@@ -11,17 +11,17 @@ import (
 
 // Connection represents a saved connection profile
 type Connection struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Project      string    `json:"project"`
-	Zone         string    `json:"zone"`
-	Instance     string    `json:"instance"`
-	Username     string    `json:"username"`
-	Domain       string    `json:"domain,omitempty"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
-	LastUsedAt   time.Time `json:"lastUsedAt,omitempty"`
-	RDPSettings  RDPSettings `json:"rdpSettings,omitempty"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Project     string      `json:"project"`
+	Zone        string      `json:"zone"`
+	Instance    string      `json:"instance"`
+	Username    string      `json:"username"`
+	Domain      string      `json:"domain,omitempty"`
+	CreatedAt   time.Time   `json:"createdAt"`
+	UpdatedAt   time.Time   `json:"updatedAt"`
+	LastUsedAt  time.Time   `json:"lastUsedAt,omitempty"`
+	RDPSettings RDPSettings `json:"rdpSettings,omitempty"`
 }
 
 // RDPSettings contains RDP-specific settings for a connection
@@ -170,8 +170,6 @@ func (cs *ConfigService) AddConnection(conn Connection) error {
 	if conn.RDPSettings.ColorDepth == 0 {
 		conn.RDPSettings.ColorDepth = 32
 	}
-	conn.RDPSettings.ClipboardShare = true
-
 	cs.config.Connections = append(cs.config.Connections, conn)
 	return cs.save()
 }

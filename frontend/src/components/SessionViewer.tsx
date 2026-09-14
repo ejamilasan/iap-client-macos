@@ -108,6 +108,13 @@ export function SessionViewer({
   const [scale, setScale] = useState(1);
   const [resolution, setResolution] = useState({ width: 1280, height: 800 });
 
+  useEffect(() => {
+    if (isActive) {
+      // @ts-ignore - Wails binding
+      window.go.main.App.SetActiveViewerSession(session.id);
+    }
+  }, [isActive, session.id]);
+
   // Render a frame to the canvas
   const renderFrame = useCallback((base64Data: string) => {
     const canvas = canvasRef.current;
@@ -206,7 +213,8 @@ export function SessionViewer({
           session.username,
           session.password,
           width,
-          height
+          height,
+          session.clipboardShare
         );
       } catch (err: any) {
         if (!mounted) return;

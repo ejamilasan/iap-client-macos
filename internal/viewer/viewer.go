@@ -11,9 +11,11 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nakagami/grdp"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -43,26 +45,29 @@ func init() {
 
 // RDPSession represents a single RDP connection
 type RDPSession struct {
-	id             string
-	client         *grdp.RdpClient
-	screen         *image.RGBA
-	bitmapCh       chan []grdp.Bitmap
-	stopCh         chan struct{}
-	connected      bool
-	loginComplete  bool // true after OnReady callback fires
-	detectedWidth  int  // actual resolution detected from frames
-	detectedHeight int
-	mu             sync.Mutex
+	id               string
+	client           *grdp.RdpClient
+	screen           *image.RGBA
+	bitmapCh         chan []grdp.Bitmap
+	stopCh           chan struct{}
+	connected        bool
+	loginComplete    bool // true after OnReady callback fires
+	detectedWidth    int  // actual resolution detected from frames
+	detectedHeight   int
+	mu               sync.Mutex
+	clipboardEnabled bool
+	lastClipboard    string
 }
 
 // RDPViewerService handles multiple embedded RDP sessions
 type RDPViewerService struct {
-	ctx      context.Context
-	sessions map[string]*RDPSession
-	mu       sync.RWMutex
-	width    int
-	height   int
-	quality  int
+	ctx             context.Context
+	sessions        map[string]*RDPSession
+	mu              sync.RWMutex
+	width           int
+	height          int
+	quality         int
+	activeSessionID string
 }
 
 // NewRDPViewerService creates a new RDP viewer service
@@ -99,11 +104,11 @@ func (v *RDPViewerService) SetQuality(quality int) {
 
 // ConnectSession establishes a new RDP session with the given ID using default resolution
 func (v *RDPViewerService) ConnectSession(sessionId, host string, port int, username, password string) error {
-	return v.ConnectSessionWithResolution(sessionId, host, port, username, password, v.width, v.height)
+	return v.ConnectSessionWithResolution(sessionId, host, port, username, password, v.width, v.height, true)
 }
 
 // ConnectSessionWithResolution establishes a new RDP session with a specific resolution
-func (v *RDPViewerService) ConnectSessionWithResolution(sessionId, host string, port int, username, password string, width, height int) error {
+func (v *RDPViewerService) ConnectSessionWithResolution(sessionId, host string, port int, username, password string, width, height int, clipboardEnabled bool) error {
 	log.Printf("[RDPViewer:%s] Connecting to %s:%d as %s (resolution: %dx%d)", sessionId, host, port, username, width, height)
 
 	// Check if session already exists
@@ -148,12 +153,16 @@ func (v *RDPViewerService) ConnectSessionWithResolution(sessionId, host string, 
 
 	// Create session
 	session := &RDPSession{
-		id:        sessionId,
-		client:    client,
-		screen:    screen,
-		bitmapCh:  bitmapCh,
-		stopCh:    stopCh,
-		connected: false,
+		id:               sessionId,
+		client:           client,
+		screen:           screen,
+		bitmapCh:         bitmapCh,
+		stopCh:           stopCh,
+		connected:        false,
+		clipboardEnabled: clipboardEnabled,
+	}
+	if clipboardEnabled {
+		client.SetClipboard(&sessionClipboard{service: v, session: session})
 	}
 
 	log.Printf("[RDPViewer:%s] Attempting login...", sessionId)
@@ -235,8 +244,91 @@ func (v *RDPViewerService) ConnectSessionWithResolution(sessionId, host string, 
 
 	// Start bitmap processing goroutine for this session
 	go v.processSessionBitmaps(session)
+	if clipboardEnabled {
+		go v.watchSessionClipboard(session)
+	}
 
 	return nil
+}
+
+type sessionClipboard struct {
+	service *RDPViewerService
+	session *RDPSession
+}
+
+func readPasteboard() (string, error) {
+	output, err := exec.Command("pbpaste").Output()
+	return string(output), err
+}
+
+func writePasteboard(text string) error {
+	cmd := exec.Command("pbcopy")
+	cmd.Stdin = strings.NewReader(text)
+	return cmd.Run()
+}
+
+func (c *sessionClipboard) ReadText() (string, error) {
+	if !c.service.isActiveSession(c.session.id) {
+		return "", nil
+	}
+	return readPasteboard()
+}
+
+func (c *sessionClipboard) WriteText(text string) error {
+	if !c.service.isActiveSession(c.session.id) {
+		return nil
+	}
+	if err := writePasteboard(text); err != nil {
+		return err
+	}
+	c.session.mu.Lock()
+	c.session.lastClipboard = text
+	c.session.mu.Unlock()
+	return nil
+}
+
+func (v *RDPViewerService) isActiveSession(sessionID string) bool {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.activeSessionID == sessionID
+}
+
+// SetActiveSession limits host clipboard synchronization to the visible session.
+func (v *RDPViewerService) SetActiveSession(sessionID string) {
+	v.mu.Lock()
+	v.activeSessionID = sessionID
+	v.mu.Unlock()
+}
+
+func (v *RDPViewerService) watchSessionClipboard(session *RDPSession) {
+	stopCh := session.stopCh
+	ticker := time.NewTicker(750 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			if !v.isActiveSession(session.id) {
+				continue
+			}
+			text, err := readPasteboard()
+			if err != nil || len(text) > 1024*1024 {
+				continue
+			}
+			session.mu.Lock()
+			changed := text != session.lastClipboard
+			if changed {
+				session.lastClipboard = text
+			}
+			client := session.client
+			connected := session.connected
+			session.mu.Unlock()
+			if changed && connected && client != nil {
+				client.ClipboardChanged()
+			}
+		}
+	}
 }
 
 // processSessionBitmaps handles bitmap updates for a specific session

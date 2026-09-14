@@ -1,5 +1,7 @@
 module iap-client-macos
 
+replace github.com/nakagami/grdp => ./third_party/grdp
+
 go 1.23.0
 
 require (

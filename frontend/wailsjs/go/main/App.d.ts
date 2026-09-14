@@ -43,6 +43,8 @@ export function Logout():Promise<void>;
 
 export function ResetWindowsPassword(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
+export function SetActiveViewerSession(arg1:string):Promise<void>;
+
 export function SetViewerQuality(arg1:number):Promise<void>;
 
 export function SetViewerResolution(arg1:number,arg2:number):Promise<void>;
@@ -57,7 +59,7 @@ export function StartViewer(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function StartViewerDirect(arg1:string,arg2:number,arg3:string,arg4:string):Promise<void>;
 
-export function StartViewerSession(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number,arg6:number):Promise<void>;
+export function StartViewerSession(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number,arg6:number,arg7:boolean):Promise<void>;
 
 export function StopAllTunnels():Promise<void>;
 
