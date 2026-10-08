@@ -57,6 +57,7 @@ type RDPSession struct {
 	mu               sync.Mutex
 	clipboardEnabled bool
 	lastClipboard    string
+	sharedFile       *os.File
 }
 
 // RDPViewerService handles multiple embedded RDP sessions
@@ -125,6 +126,10 @@ func (v *RDPViewerService) ConnectSessionWithResolution(sessionId, host string, 
 		if existing.client != nil {
 			existing.client.Close()
 			existing.client = nil
+		}
+		if existing.sharedFile != nil {
+			existing.sharedFile.Close()
+			existing.sharedFile = nil
 		}
 		existing.connected = false
 		existing.screen = nil
@@ -300,6 +305,61 @@ func (v *RDPViewerService) SetActiveSession(sessionID string) {
 	v.mu.Unlock()
 }
 
+// ShareFile advertises a local file to the active remote session. Windows will
+// request the contents lazily when the user pastes or drops the advertised file.
+func (v *RDPViewerService) ShareFile(sessionID, path string) (string, error) {
+	v.mu.RLock()
+	session, ok := v.sessions[sessionID]
+	active := v.activeSessionID == sessionID
+	v.mu.RUnlock()
+	if !ok {
+		return "", fmt.Errorf("viewer session not found")
+	}
+	if !active {
+		return "", fmt.Errorf("file sharing is limited to the active session")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open file: %w", err)
+	}
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return "", fmt.Errorf("inspect file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		file.Close()
+		return "", fmt.Errorf("only regular files can be shared")
+	}
+
+	session.mu.Lock()
+	if !session.clipboardEnabled || !session.connected || session.client == nil {
+		session.mu.Unlock()
+		file.Close()
+		return "", fmt.Errorf("clipboard sharing is not enabled for this session")
+	}
+	client := session.client
+	oldFile := session.sharedFile
+	session.sharedFile = file
+	if clipboard, readErr := readPasteboard(); readErr == nil {
+		session.lastClipboard = clipboard
+	}
+	session.mu.Unlock()
+	if oldFile != nil {
+		oldFile.Close()
+	}
+	if err := client.ShareFile(filepath.Base(path), info.Size(), file); err != nil {
+		session.mu.Lock()
+		if session.sharedFile == file {
+			session.sharedFile = nil
+		}
+		session.mu.Unlock()
+		file.Close()
+		return "", err
+	}
+	return filepath.Base(path), nil
+}
+
 func (v *RDPViewerService) watchSessionClipboard(session *RDPSession) {
 	stopCh := session.stopCh
 	ticker := time.NewTicker(750 * time.Millisecond)
@@ -320,6 +380,10 @@ func (v *RDPViewerService) watchSessionClipboard(session *RDPSession) {
 			changed := text != session.lastClipboard
 			if changed {
 				session.lastClipboard = text
+				if session.sharedFile != nil {
+					session.sharedFile.Close()
+					session.sharedFile = nil
+				}
 			}
 			client := session.client
 			connected := session.connected
@@ -530,6 +594,10 @@ func (v *RDPViewerService) DisconnectSession(sessionId string) {
 	if session.client != nil {
 		session.client.Close()
 		session.client = nil
+	}
+	if session.sharedFile != nil {
+		session.sharedFile.Close()
+		session.sharedFile = nil
 	}
 	session.connected = false
 	session.screen = nil

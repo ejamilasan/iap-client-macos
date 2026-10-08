@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"unicode/utf16"
@@ -13,26 +14,45 @@ import (
 )
 
 const (
-	ChannelName           = plugin.CLIPRDR_SVC_CHANNEL_NAME
-	ChannelOption         = plugin.CHANNEL_OPTION_INITIALIZED | plugin.CHANNEL_OPTION_ENCRYPT_RDP | plugin.CHANNEL_OPTION_COMPRESS_RDP | plugin.CHANNEL_OPTION_SHOW_PROTOCOL
-	cbMonitorReady        = 1
-	cbFormatList          = 2
-	cbFormatListResponse  = 3
-	cbFormatDataRequest   = 4
-	cbFormatDataResponse  = 5
-	cbClipCaps            = 7
-	cbResponseOK          = 1
-	cbResponseFail        = 2
-	cbCapsTypeGeneral     = 1
-	cbCapsVersion2        = 2
-	cbUseLongFormatNames  = 2
-	cfUnicodeText         = 13
-	maxClipboardTextBytes = 1024 * 1024
+	ChannelName             = plugin.CLIPRDR_SVC_CHANNEL_NAME
+	ChannelOption           = plugin.CHANNEL_OPTION_INITIALIZED | plugin.CHANNEL_OPTION_ENCRYPT_RDP | plugin.CHANNEL_OPTION_COMPRESS_RDP | plugin.CHANNEL_OPTION_SHOW_PROTOCOL
+	cbMonitorReady          = 1
+	cbFormatList            = 2
+	cbFormatListResponse    = 3
+	cbFormatDataRequest     = 4
+	cbFormatDataResponse    = 5
+	cbClipCaps              = 7
+	cbFileContentsRequest   = 8
+	cbFileContentsResponse  = 9
+	cbResponseOK            = 1
+	cbResponseFail          = 2
+	cbCapsTypeGeneral       = 1
+	cbCapsVersion2          = 2
+	cbUseLongFormatNames    = 2
+	cbStreamFileClipEnabled = 4
+	cbFileClipNoFilePaths   = 8
+	cfUnicodeText           = 13
+	cfFileDescriptorW       = 0xC001
+	cfFileContents          = 0xC002
+	fileContentsSize        = 1
+	fileContentsRange       = 2
+	fileAttributeNormal     = 0x80
+	fdAttributes            = 0x00000004
+	fdFileSize              = 0x00000040
+	fdProgressUI            = 0x00004000
+	maxClipboardTextBytes   = 1024 * 1024
+	maxFileChunkBytes       = 1024 * 1024
 )
 
 type Clipboard interface {
 	ReadText() (string, error)
 	WriteText(string) error
+}
+
+type SharedFile struct {
+	Name   string
+	Size   int64
+	Reader io.ReaderAt
 }
 
 // Client implements the text-only subset of MS-RDPECLIP.
@@ -41,6 +61,7 @@ type Client struct {
 	clipboard          Clipboard
 	useLongFormatNames bool
 	waitingForText     bool
+	sharedFile         *SharedFile
 	stateMu            sync.Mutex
 	sendMu             sync.Mutex
 }
@@ -80,12 +101,15 @@ func (c *Client) Process(data []byte) {
 		c.processDataRequest(payload)
 	case cbFormatDataResponse:
 		c.processDataResponse(flags, payload)
+	case cbFileContentsRequest:
+		c.processFileContentsRequest(payload)
 	}
 }
 
 func (c *Client) AnnounceText() {
 	c.stateMu.Lock()
 	useLongFormatNames := c.useLongFormatNames
+	c.sharedFile = nil
 	c.stateMu.Unlock()
 	payload := &bytes.Buffer{}
 	_ = binary.Write(payload, binary.LittleEndian, uint32(cfUnicodeText))
@@ -95,6 +119,32 @@ func (c *Client) AnnounceText() {
 		payload.Write(make([]byte, 32))
 	}
 	c.sendHeader(cbFormatList, 0, payload.Bytes())
+}
+
+func (c *Client) ShareFile(file SharedFile) error {
+	if file.Name == "" || file.Size < 0 || file.Reader == nil {
+		return fmt.Errorf("invalid shared file")
+	}
+	c.stateMu.Lock()
+	c.sharedFile = &file
+	useLongFormatNames := c.useLongFormatNames
+	c.stateMu.Unlock()
+	payload := &bytes.Buffer{}
+	writeFormat(payload, cfFileDescriptorW, "FileGroupDescriptorW", useLongFormatNames)
+	writeFormat(payload, cfFileContents, "FileContents", useLongFormatNames)
+	c.sendHeader(cbFormatList, 0, payload.Bytes())
+	return nil
+}
+
+func writeFormat(payload *bytes.Buffer, id uint32, name string, longNames bool) {
+	_ = binary.Write(payload, binary.LittleEndian, id)
+	if longNames {
+		payload.Write(encodeUTF16(name))
+		return
+	}
+	fixedName := make([]byte, 32)
+	copy(fixedName, []byte(name))
+	payload.Write(fixedName)
 }
 
 func (c *Client) processCapabilities(payload []byte) {
@@ -134,7 +184,16 @@ func (c *Client) processFormatList(payload []byte) {
 }
 
 func (c *Client) processDataRequest(payload []byte) {
-	if len(payload) < 4 || binary.LittleEndian.Uint32(payload[:4]) != cfUnicodeText {
+	if len(payload) < 4 {
+		c.sendHeader(cbFormatDataResponse, cbResponseFail, nil)
+		return
+	}
+	formatID := binary.LittleEndian.Uint32(payload[:4])
+	if formatID == cfFileDescriptorW {
+		c.sendFileDescriptor()
+		return
+	}
+	if formatID != cfUnicodeText {
 		c.sendHeader(cbFormatDataResponse, cbResponseFail, nil)
 		return
 	}
@@ -149,6 +208,84 @@ func (c *Client) processDataRequest(payload []byte) {
 		return
 	}
 	c.sendHeader(cbFormatDataResponse, cbResponseOK, encoded)
+}
+
+func (c *Client) sendFileDescriptor() {
+	c.stateMu.Lock()
+	file := c.sharedFile
+	c.stateMu.Unlock()
+	if file == nil {
+		c.sendHeader(cbFormatDataResponse, cbResponseFail, nil)
+		return
+	}
+	descriptor := make([]byte, 4+592)
+	binary.LittleEndian.PutUint32(descriptor[0:4], 1)
+	base := 4
+	binary.LittleEndian.PutUint32(descriptor[base:base+4], fdAttributes|fdFileSize|fdProgressUI)
+	binary.LittleEndian.PutUint32(descriptor[base+36:base+40], fileAttributeNormal)
+	binary.LittleEndian.PutUint32(descriptor[base+64:base+68], uint32(uint64(file.Size)>>32))
+	binary.LittleEndian.PutUint32(descriptor[base+68:base+72], uint32(file.Size))
+	nameUnits := make([]uint16, 0, 259)
+	for _, value := range file.Name {
+		encodedRune := utf16.Encode([]rune{value})
+		if len(nameUnits)+len(encodedRune) > 259 {
+			break
+		}
+		nameUnits = append(nameUnits, encodedRune...)
+	}
+	name := make([]byte, len(nameUnits)*2)
+	for i, unit := range nameUnits {
+		binary.LittleEndian.PutUint16(name[i*2:], unit)
+	}
+	copy(descriptor[base+72:base+592], name)
+	c.sendHeader(cbFormatDataResponse, cbResponseOK, descriptor)
+}
+
+func (c *Client) processFileContentsRequest(payload []byte) {
+	if len(payload) < 24 {
+		c.sendFileContentsResponse(0, cbResponseFail, nil)
+		return
+	}
+	streamID := binary.LittleEndian.Uint32(payload[0:4])
+	listIndex := binary.LittleEndian.Uint32(payload[4:8])
+	flags := binary.LittleEndian.Uint32(payload[8:12])
+	offset := int64(binary.LittleEndian.Uint64(payload[12:20]))
+	requested := binary.LittleEndian.Uint32(payload[20:24])
+	c.stateMu.Lock()
+	file := c.sharedFile
+	c.stateMu.Unlock()
+	if file == nil || listIndex != 0 || offset < 0 {
+		c.sendFileContentsResponse(streamID, cbResponseFail, nil)
+		return
+	}
+	if flags&fileContentsSize != 0 {
+		size := make([]byte, 8)
+		binary.LittleEndian.PutUint64(size, uint64(file.Size))
+		c.sendFileContentsResponse(streamID, cbResponseOK, size)
+		return
+	}
+	if flags&fileContentsRange == 0 || requested > maxFileChunkBytes || offset > file.Size {
+		c.sendFileContentsResponse(streamID, cbResponseFail, nil)
+		return
+	}
+	remaining := file.Size - offset
+	if int64(requested) > remaining {
+		requested = uint32(remaining)
+	}
+	data := make([]byte, requested)
+	n, err := file.Reader.ReadAt(data, offset)
+	if err != nil && err != io.EOF {
+		c.sendFileContentsResponse(streamID, cbResponseFail, nil)
+		return
+	}
+	c.sendFileContentsResponse(streamID, cbResponseOK, data[:n])
+}
+
+func (c *Client) sendFileContentsResponse(streamID uint32, flags uint16, data []byte) {
+	payload := make([]byte, 4+len(data))
+	binary.LittleEndian.PutUint32(payload[:4], streamID)
+	copy(payload[4:], data)
+	c.sendHeader(cbFileContentsResponse, flags, payload)
 }
 
 func (c *Client) processDataResponse(flags uint16, payload []byte) {
@@ -169,7 +306,7 @@ func (c *Client) sendCapabilities() {
 	binary.LittleEndian.PutUint16(payload[4:6], cbCapsTypeGeneral)
 	binary.LittleEndian.PutUint16(payload[6:8], 12)
 	binary.LittleEndian.PutUint32(payload[8:12], cbCapsVersion2)
-	binary.LittleEndian.PutUint32(payload[12:16], cbUseLongFormatNames)
+	binary.LittleEndian.PutUint32(payload[12:16], cbUseLongFormatNames|cbStreamFileClipEnabled|cbFileClipNoFilePaths)
 	c.sendHeader(cbClipCaps, 0, payload)
 }
 

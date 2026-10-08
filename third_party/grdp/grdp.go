@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"io"
 	"log/slog"
 	"net"
 
@@ -102,6 +103,13 @@ func (g *RdpClient) ClipboardChanged() {
 	if g.clipboard != nil && g.eventReady {
 		g.clipboard.AnnounceText()
 	}
+}
+
+func (g *RdpClient) ShareFile(name string, size int64, reader io.ReaderAt) error {
+	if g.clipboard == nil || !g.eventReady {
+		return fmt.Errorf("clipboard redirection is not ready")
+	}
+	return g.clipboard.ShareFile(cliprdr.SharedFile{Name: name, Size: size, Reader: reader})
 }
 
 func bpp(BitsPerPixel uint16) (pixel int) {

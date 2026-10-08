@@ -82,6 +82,10 @@ export function ResetWindowsPassword(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ResetWindowsPassword'](arg1, arg2, arg3, arg4);
 }
 
+export function SelectAndShareViewerFile(arg1) {
+  return window['go']['main']['App']['SelectAndShareViewerFile'](arg1);
+}
+
 export function SetActiveViewerSession(arg1) {
   return window['go']['main']['App']['SetActiveViewerSession'](arg1);
 }
