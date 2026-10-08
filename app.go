@@ -428,6 +428,22 @@ func (a *App) SetActiveViewerSession(sessionId string) {
 	}
 }
 
+// SelectAndShareViewerFile prompts for a local file and advertises it to the
+// active RDP session. The remote reads the data when the user pastes the file.
+func (a *App) SelectAndShareViewerFile(sessionId string) (string, error) {
+	if a.viewerService == nil {
+		return "", fmt.Errorf("viewer service not initialized")
+	}
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{Title: "Send file to remote session"})
+	if err != nil {
+		return "", fmt.Errorf("select file: %w", err)
+	}
+	if path == "" {
+		return "", nil
+	}
+	return a.viewerService.ShareFile(sessionId, path)
+}
+
 // StopViewerSession stops a specific viewer session
 func (a *App) StopViewerSession(sessionId string) error {
 	if a.viewerService == nil {

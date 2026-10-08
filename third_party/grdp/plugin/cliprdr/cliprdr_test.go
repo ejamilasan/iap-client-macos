@@ -1,6 +1,7 @@
 package cliprdr
 
 import (
+	"bytes"
 	"encoding/binary"
 	"testing"
 )
@@ -43,6 +44,54 @@ func TestMonitorReadyAdvertisesCapabilitiesAndUnicodeText(t *testing.T) {
 	}
 	if got := binary.LittleEndian.Uint16(sender.messages[1][:2]); got != cbFormatList {
 		t.Fatalf("second message type = %d", got)
+	}
+	flags := binary.LittleEndian.Uint32(sender.messages[0][20:24])
+	if flags&cbStreamFileClipEnabled == 0 {
+		t.Fatal("file clipboard capability was not advertised")
+	}
+}
+
+func TestShareFileDescriptorAndContents(t *testing.T) {
+	contents := []byte("0123456789")
+	client := NewClient(&fakeClipboard{})
+	sender := &fakeSender{}
+	client.Sender(sender)
+	if err := client.ShareFile(SharedFile{Name: "report.txt", Size: int64(len(contents)), Reader: bytes.NewReader(contents)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := binary.LittleEndian.Uint16(sender.messages[0][:2]); got != cbFormatList {
+		t.Fatalf("message type = %d", got)
+	}
+
+	descriptorRequest := make([]byte, 4)
+	binary.LittleEndian.PutUint32(descriptorRequest, cfFileDescriptorW)
+	client.Process(pdu(cbFormatDataRequest, 0, descriptorRequest))
+	descriptor := sender.messages[1][8:]
+	if got := binary.LittleEndian.Uint32(descriptor[:4]); got != 1 {
+		t.Fatalf("file count = %d", got)
+	}
+	if got := binary.LittleEndian.Uint32(descriptor[72:76]); got != uint32(len(contents)) {
+		t.Fatalf("file size = %d", got)
+	}
+	if got := decodeUTF16(descriptor[76:]); got != "report.txt" {
+		t.Fatalf("file name = %q", got)
+	}
+
+	request := make([]byte, 24)
+	binary.LittleEndian.PutUint32(request[0:4], 42)
+	binary.LittleEndian.PutUint32(request[8:12], fileContentsRange)
+	binary.LittleEndian.PutUint64(request[12:20], 2)
+	binary.LittleEndian.PutUint32(request[20:24], 4)
+	client.Process(pdu(cbFileContentsRequest, 0, request))
+	response := sender.messages[2]
+	if got := binary.LittleEndian.Uint16(response[:2]); got != cbFileContentsResponse {
+		t.Fatalf("message type = %d", got)
+	}
+	if got := binary.LittleEndian.Uint32(response[8:12]); got != 42 {
+		t.Fatalf("stream id = %d", got)
+	}
+	if got := string(response[12:]); got != "2345" {
+		t.Fatalf("file contents = %q", got)
 	}
 }
 

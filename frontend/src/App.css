@@ -1567,6 +1567,24 @@ body {
   overflow: hidden;
 }
 
+.session-file-toolbar {
+  min-height: 36px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.session-file-toolbar span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-canvas-container {
   flex: 1;
   display: flex;

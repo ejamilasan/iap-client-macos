@@ -107,6 +107,7 @@ export function SessionViewer({
   const latestFrameRef = useRef<string | null>(null);
   const [scale, setScale] = useState(1);
   const [resolution, setResolution] = useState({ width: 1280, height: 800 });
+  const [fileTransferStatus, setFileTransferStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (isActive) {
@@ -342,6 +343,17 @@ export function SessionViewer({
     e.preventDefault();
   };
 
+  const handleSendFile = async () => {
+    try {
+      setFileTransferStatus('Choose a file...');
+      // @ts-ignore - Wails binding
+      const fileName = await window.go.main.App.SelectAndShareViewerFile(session.id);
+      setFileTransferStatus(fileName ? `${fileName} ready — press Ctrl+V in the remote session` : null);
+    } catch (err: any) {
+      setFileTransferStatus(`File transfer failed: ${err?.message || err}`);
+    }
+  };
+
   return (
     <div className="session-viewer" ref={containerRef} style={style}>
       {session.status === 'error' && (
@@ -364,8 +376,17 @@ export function SessionViewer({
       )}
 
       {(session.status === 'connected' || session.status === 'connecting') && (
-        <div className="session-canvas-container">
-          <canvas
+        <>
+          {session.status === 'connected' && session.clipboardShare && (
+            <div className="session-file-toolbar">
+              <button className="btn btn-secondary btn-sm" onClick={handleSendFile}>
+                Send file
+              </button>
+              {fileTransferStatus && <span title={fileTransferStatus}>{fileTransferStatus}</span>}
+            </div>
+          )}
+          <div className="session-canvas-container">
+            <canvas
             ref={canvasRef}
             width={resolution.width}
             height={resolution.height}
@@ -379,8 +400,9 @@ export function SessionViewer({
             onKeyDown={handleKeyDown}
             onKeyUp={handleKeyUp}
             onContextMenu={handleContextMenu}
-          />
-        </div>
+            />
+          </div>
+        </>
       )}
     </div>
   );
