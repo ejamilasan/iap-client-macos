@@ -104,6 +104,7 @@ export function SessionViewer({
 }: SessionViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
   const latestFrameRef = useRef<string | null>(null);
   const [scale, setScale] = useState(1);
   const [resolution, setResolution] = useState({ width: 1280, height: 800 });
@@ -241,9 +242,9 @@ export function SessionViewer({
 
   useEffect(() => {
     const updateCanvasSize = () => {
-      if (!containerRef.current) return;
-      const containerWidth = containerRef.current.clientWidth;
-      const containerHeight = containerRef.current.clientHeight;
+      if (!canvasContainerRef.current) return;
+      const containerWidth = canvasContainerRef.current.clientWidth;
+      const containerHeight = canvasContainerRef.current.clientHeight;
 
       // Calculate the display size that fits the container while maintaining aspect ratio
       const aspectRatio = resolution.width / resolution.height;
@@ -268,8 +269,8 @@ export function SessionViewer({
     window.addEventListener('resize', updateCanvasSize);
 
     const resizeObserver = new ResizeObserver(updateCanvasSize);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
+    if (canvasContainerRef.current) {
+      resizeObserver.observe(canvasContainerRef.current);
     }
 
     return () => {
@@ -385,21 +386,21 @@ export function SessionViewer({
               {fileTransferStatus && <span title={fileTransferStatus}>{fileTransferStatus}</span>}
             </div>
           )}
-          <div className="session-canvas-container">
+          <div className="session-canvas-container" ref={canvasContainerRef}>
             <canvas
-            ref={canvasRef}
-            width={resolution.width}
-            height={resolution.height}
-            className="session-canvas"
-            tabIndex={isActive ? 0 : -1}
-            style={canvasStyle}
-            onMouseMove={handleMouseMove}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            onWheel={handleWheel}
-            onKeyDown={handleKeyDown}
-            onKeyUp={handleKeyUp}
-            onContextMenu={handleContextMenu}
+              ref={canvasRef}
+              width={resolution.width}
+              height={resolution.height}
+              className="session-canvas"
+              tabIndex={isActive ? 0 : -1}
+              style={canvasStyle}
+              onMouseMove={handleMouseMove}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onWheel={handleWheel}
+              onKeyDown={handleKeyDown}
+              onKeyUp={handleKeyUp}
+              onContextMenu={handleContextMenu}
             />
           </div>
         </>
